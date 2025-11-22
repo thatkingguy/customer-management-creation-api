@@ -270,29 +270,20 @@ func (r *customerProfileRepository) FindDuplicateSME(ctx context.Context, tx *sq
 }
 
 func (r *customerProfileRepository) CheckPhoneExists(ctx context.Context, phone string) (bool, error) {
-	// Optimized query: Only check indexed mobileNumber column (JSONB checks are too slow)
-	// The mobileNumber column is indexed and should be the primary source of truth
+	// Optimized query: Use EXISTS with indexed mobileNumber column
+	// Simplified query - mobileNumber index should handle filtering efficiently
+	// Removed JOIN - checking mobileNumber directly is faster since it's indexed
 	query := `
 		SELECT EXISTS (
 			SELECT 1 
 			FROM customer_profile cp
-			INNER JOIN customer c ON cp."customerId" = c."customerId"
-			WHERE c."customerType" = 'Individual'
-			AND cp."mobileNumber" = $1
+			WHERE cp."mobileNumber" = $1
 			LIMIT 1
 		) as exists
 	`
 
-	// Add timeout to prevent hanging queries
-	queryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-
 	var exists bool
-	err := r.db.GetContext(queryCtx, &exists, query, phone)
-	if err == context.DeadlineExceeded {
-		logger.Log.WithError(err).Error("CheckPhoneExists: Query timeout (3s exceeded)")
-		return false, fmt.Errorf("query timeout: phone check took too long: %w", err)
-	}
+	err := r.db.GetContext(ctx, &exists, query, phone)
 	if err != nil {
 		logger.Log.WithError(err).Error("CheckPhoneExists: Query failed")
 		return false, err
@@ -302,10 +293,9 @@ func (r *customerProfileRepository) CheckPhoneExists(ctx context.Context, phone 
 
 func (r *customerProfileRepository) GetNextCustomerNumber(ctx context.Context, tx *sql.Tx) (string, error) {
 	var sequenceValue int64
-	// Sequence calls are fast, but add timeout for safety
-	queryCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	err := tx.QueryRowContext(queryCtx, `SELECT nextval('customer_number_seq')`).Scan(&sequenceValue)
+	// Use context directly - parent context already has timeout
+	// Sequence calls are very fast and shouldn't need nested timeouts
+	err := tx.QueryRowContext(ctx, `SELECT nextval('customer_number_seq')`).Scan(&sequenceValue)
 	if err != nil {
 		return "", err
 	}

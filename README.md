@@ -150,7 +150,34 @@ customer-service/
 
 See `.env.example` for all available configuration options.
 
+### Logging Configuration
+
+The logging level can be controlled via the `LOG_LEVEL` environment variable:
+
+- `debug` - Verbose logging (all logs including DEBUG level)
+- `info` - Standard logging (INFO, WARN, ERROR levels only)
+- `warn` - Warning and error logs only
+- `error` - Error logs only
+
+**Default behavior:**
+- If `LOG_LEVEL` is set, it takes precedence
+- If not set, defaults based on `ENV`/`NODE_ENV`:
+  - `development`/`dev` → `debug`
+  - `staging`/`qa`/`test` → `info`
+  - `production`/`prod` → `info`
+
+**Example:**
+```bash
+# Set explicit log level
+LOG_LEVEL=info
+
+# Or rely on environment-based defaults
+ENV=production  # Will use 'info' level
+```
+
 ## License
 
 [Your License Here]
+
+
 

@@ -37,10 +37,13 @@ func main() {
 	}
 	defer database.Close()
 
-	// Initialize sequences
+	// Initialize sequences and indexes
 	ctx := context.Background()
 	if err := database.InitializeSequences(ctx); err != nil {
 		logger.Log.WithError(err).Warn("Failed to initialize sequences (may already exist)")
+	}
+	if err := database.InitializeIndexes(ctx); err != nil {
+		logger.Log.WithError(err).Warn("Failed to initialize indexes (may already exist)")
 	}
 
 	// Initialize repositories
@@ -51,6 +54,15 @@ func main() {
 	sectorRepo := repository.NewSectorRepository(database.GetDB())
 	industryRepo := repository.NewIndustryRepository(database.GetDB())
 	targetRepo := repository.NewTargetRepository(database.GetDB())
+	combinedRepo := repository.NewSectorIndustryTargetRepository(database.GetDB())
+	requestRepo := repository.NewRequestRepository(database.GetDB())
+	riskAssessmentRepo := repository.NewRiskAssessmentRepository(database.GetDB())
+	signatoryRepo := repository.NewSignatoryRepository(database.GetDB())
+	otherAccountRepo := repository.NewOtherAccountRepository(database.GetDB())
+	referenceRepo := repository.NewReferenceRepository(database.GetDB())
+	interimApprovalConfigRepo := repository.NewInterimApprovalConfigRepository(database.GetDB())
+	gracePeriodRepo := repository.NewCustomerGracePeriodRepository(database.GetDB())
+	waiverRequestRepo := repository.NewWaiverRequestRepository(database.GetDB())
 
 	// Initialize services
 	idGen := service.NewIDGeneratorService()
@@ -64,16 +76,38 @@ func main() {
 		sectorRepo,
 		industryRepo,
 		targetRepo,
+		combinedRepo,
+		validationSvc,
+		idGen,
+	)
+	requestService := service.NewRequestService(
+		database.GetDB(),
+		requestRepo,
+		customerRepo,
+		profileRepo,
+		lookupRepo,
+		activityLogRepo,
+		sectorRepo,
+		industryRepo,
+		targetRepo,
+		riskAssessmentRepo,
+		signatoryRepo,
+		otherAccountRepo,
+		referenceRepo,
+		interimApprovalConfigRepo,
+		gracePeriodRepo,
+		waiverRequestRepo,
 		validationSvc,
 		idGen,
 	)
 
 	// Initialize handlers
 	customerHandler := channel.NewCustomerHandler(customerService)
+	requestHandler := handler.NewRequestHandler(requestService)
 	healthHandler := handler.NewHealthHandler()
 
 	// Setup router
-	router := setupRouter(cfg, customerHandler, healthHandler)
+	router := setupRouter(cfg, customerHandler, requestHandler, healthHandler)
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -107,7 +141,7 @@ func main() {
 	}
 }
 
-func setupRouter(cfg *config.Config, customerHandler *channel.CustomerHandler, healthHandler *handler.HealthHandler) *gin.Engine {
+func setupRouter(cfg *config.Config, customerHandler *channel.CustomerHandler, requestHandler *handler.RequestHandler, healthHandler *handler.HealthHandler) *gin.Engine {
 	// Set Gin mode based on environment
 	if cfg.Server.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -132,6 +166,16 @@ func setupRouter(cfg *config.Config, customerHandler *channel.CustomerHandler, h
 		channelGroup.Use(middleware.APIKeyAuthMiddleware(cfg.API.Key))
 		{
 			channelGroup.POST("/directCreateCustomer", customerHandler.DirectCreateCustomer)
+		}
+
+		// Dashboard endpoints (JWT auth required)
+		dashboardGroup := v1.Group("")
+		dashboardGroup.Use(middleware.JWTAuthMiddleware())
+		{
+			// Draft creation endpoint
+			dashboardGroup.POST("/draft", requestHandler.CreateDraft)
+			// Request approval endpoint
+			dashboardGroup.PATCH("/request/:requestId", requestHandler.ApproveRequest)
 		}
 
 		// Customer endpoints (for future dashboard)

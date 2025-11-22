@@ -103,8 +103,12 @@ func (c *Config) Validate() error {
 
 // ConnectionString returns the PostgreSQL connection string
 func (c *DatabaseConfig) ConnectionString() string {
+	// Add connection timeout and performance optimizations
+	// connect_timeout: Fail fast if can't connect (default 0 = wait forever)
+	// synchronous_commit=off: Disable synchronous commit for better performance (data is still safe, just not immediately flushed)
+	// Note: This trades off some durability guarantees for performance. For production, consider using 'local' or 'remote_write'
 	return fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s connect_timeout=5 synchronous_commit=off",
 		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode,
 	)
 }

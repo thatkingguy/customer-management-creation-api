@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"database/sql"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/sterling-retailcore-team/customer-management-creation-api/internal/repository"
@@ -26,18 +25,16 @@ func (s *idGeneratorService) GenerateUUID() uuid.UUID {
 }
 
 func (s *idGeneratorService) GenerateCustomerNumber(ctx context.Context, tx *sql.Tx, profileRepo repository.CustomerProfileRepository) (string, error) {
-	// Add timeout to sequence call
-	queryCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	return profileRepo.GetNextCustomerNumber(queryCtx, tx)
+	// Use the context directly - the parent context already has a timeout
+	// Nested timeouts can cause issues, so we rely on the transaction context timeout
+	return profileRepo.GetNextCustomerNumber(ctx, tx)
 }
 
 func (s *idGeneratorService) GenerateCustomerEntityID(ctx context.Context, tx *sql.Tx) (string, error) {
-	// Add timeout to sequence call
-	queryCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
+	// Use the context directly - the parent context already has a timeout
+	// Nested timeouts can cause issues, so we rely on the transaction context timeout
 	var entityID string
-	err := tx.QueryRowContext(queryCtx, `SELECT nextval('customer_entity_id_seq')::text`).Scan(&entityID)
+	err := tx.QueryRowContext(ctx, `SELECT nextval('customer_entity_id_seq')::text`).Scan(&entityID)
 	return entityID, err
 }
 

@@ -14,3 +14,17 @@ type HealthResponse struct {
 	Timestamp string `json:"timestamp"`
 	Database  string `json:"database"`
 }
+
+// CreateDraftResponse represents the response for draft creation
+type CreateDraftResponse struct {
+	RequestID uuid.UUID `json:"requestId"`
+}
+
+// ApproveRequestResponse represents the response for request approval
+type ApproveRequestResponse struct {
+	CustomerID uuid.UUID  `json:"customerId"`
+	RequestID  uuid.UUID  `json:"requestId"`
+	SignatoryID *uuid.UUID `json:"signatoryId"`
+	Product     *string    `json:"product"`
+}
+

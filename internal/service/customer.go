@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -54,6 +55,7 @@ type customerService struct {
 	sectorRepo      repository.SectorRepository
 	industryRepo    repository.IndustryRepository
 	targetRepo      repository.TargetRepository
+	combinedRepo    repository.SectorIndustryTargetRepository
 	validationSvc   ValidationService
 	idGen           IDGeneratorService
 }
@@ -86,6 +88,7 @@ func NewCustomerService(
 	sectorRepo repository.SectorRepository,
 	industryRepo repository.IndustryRepository,
 	targetRepo repository.TargetRepository,
+	combinedRepo repository.SectorIndustryTargetRepository,
 	validationSvc ValidationService,
 	idGen IDGeneratorService,
 ) CustomerService {
@@ -98,12 +101,16 @@ func NewCustomerService(
 		sectorRepo:      sectorRepo,
 		industryRepo:    industryRepo,
 		targetRepo:      targetRepo,
+		combinedRepo:    combinedRepo,
 		validationSvc:   validationSvc,
 		idGen:           idGen,
 	}
 }
 
 func (s *customerService) CreateCustomer(ctx context.Context, req *CreateCustomerRequest) (*CreateCustomerResponse, error) {
+	startTime := time.Now()
+	logger.Log.Debug("CreateCustomer: Starting customer creation")
+
 	// Normalize customer type
 	customerType := utils.NormalizeCustomerType(req.CustomerType)
 	if customerType != "Individual" && customerType != "SME" {
@@ -111,7 +118,9 @@ func (s *customerService) CreateCustomer(ctx context.Context, req *CreateCustome
 	}
 
 	// Normalize and clean bioData
+	normalizeStart := time.Now()
 	bioData := s.normalizeBioData(req.BioData)
+	logger.Log.WithField("duration_ms", time.Since(normalizeStart).Milliseconds()).Debug("CreateCustomer: BioData normalized")
 
 	// Extract branch (priority: bioData.branch > req.Branch)
 	branch := req.Branch
@@ -123,13 +132,17 @@ func (s *customerService) CreateCustomer(ctx context.Context, req *CreateCustome
 	}
 
 	// Validate bioData
+	validateStart := time.Now()
 	if err := s.validationSvc.ValidateCustomerBioData(ctx, bioData, customerType, true); err != nil {
 		logger.Log.WithError(err).Error("CreateCustomer: BioData validation failed")
 		return nil, err
 	}
+	logger.Log.WithField("duration_ms", time.Since(validateStart).Milliseconds()).Debug("CreateCustomer: BioData validation completed")
 
 	// Check phone exists (for channel requests, this doesn't throw error)
+	phoneCheckStart := time.Now()
 	phoneExists, err := s.validationSvc.CheckPhoneExists(ctx, bioData, s.profileRepo)
+	phoneCheckDuration := time.Since(phoneCheckStart)
 	if err != nil {
 		logger.Log.WithError(err).Error("CreateCustomer: Phone check failed")
 		return nil, utils.NewDatabaseError("Failed to check phone number", err)
@@ -137,6 +150,7 @@ func (s *customerService) CreateCustomer(ctx context.Context, req *CreateCustome
 	if phoneExists {
 		return nil, utils.NewDuplicateError("Customer with Phone number already exists", nil)
 	}
+	logger.Log.WithField("duration_ms", phoneCheckDuration.Milliseconds()).Debug("CreateCustomer: Phone check completed")
 
 	// Validate sector/industry/target BEFORE transaction (read-only lookups, avoids potential deadlocks)
 	sectorCode, _ := getFieldValueFromMap(bioData, "sectorCode")
@@ -155,44 +169,64 @@ func (s *customerService) CreateCustomer(ctx context.Context, req *CreateCustome
 		targetCodeStr = fmt.Sprintf("%v", targetCode)
 	}
 
-	sectorID, industryID, targetID, sectorDesc, industryDesc, targetDesc, err := s.validationSvc.ValidateSectorIndustryTarget(
+	sectorValidateStart := time.Now()
+	// Use combined query method for better performance (single round trip instead of 3)
+	sectorID, industryID, targetID, sectorDesc, industryDesc, targetDesc, err := s.validationSvc.ValidateSectorIndustryTargetCombined(
 		ctx, sectorCodeStr, industryCodeStr, targetCodeStr,
-		s.sectorRepo, s.industryRepo, s.targetRepo,
+		s.combinedRepo,
 	)
+	sectorValidateDuration := time.Since(sectorValidateStart)
 	if err != nil {
 		logger.Log.WithError(err).Error("CreateCustomer: Sector/industry/target validation failed")
 		return nil, err
 	}
+	logger.Log.WithField("duration_ms", sectorValidateDuration.Milliseconds()).Debug("CreateCustomer: Sector/industry/target validation completed")
 
 	// Start transaction
 	var customerID uuid.UUID
 	var requestID uuid.UUID
 
+	transactionStart := time.Now()
+	beginStart := time.Now()
 	err = postgres.WithTransaction(ctx, s.db.DB, func(tx *sql.Tx) error {
+		beginDuration := time.Since(beginStart)
+		logger.Log.WithField("duration_ms", beginDuration.Milliseconds()).Debug("CreateCustomer: Transaction begun")
+
 		// Lookup customer (duplicate check and insert into lookup table)
+		lookupStart := time.Now()
 		if err := s.validationSvc.LookupCustomer(ctx, bioData, customerType, s.profileRepo, s.lookupRepo, tx); err != nil {
 			logger.Log.WithError(err).Error("CreateCustomer: Lookup customer failed")
 			return err
 		}
+		logger.Log.WithField("duration_ms", time.Since(lookupStart).Milliseconds()).Debug("CreateCustomer: Lookup customer completed")
 
 		// Generate IDs
+		uuidGenStart := time.Now()
 		customerID = s.idGen.GenerateUUID()
 		customerProfileID := s.idGen.GenerateUUID()
+		logger.Log.WithField("duration_ms", time.Since(uuidGenStart).Milliseconds()).Debug("CreateCustomer: UUIDs generated")
 
+		customerNumberStart := time.Now()
 		customerNumber, err := s.idGen.GenerateCustomerNumber(ctx, tx, s.profileRepo)
+		customerNumberDuration := time.Since(customerNumberStart)
 		if err != nil {
 			logger.Log.WithError(err).Error("CreateCustomer: Failed to generate customer number")
 			return fmt.Errorf("failed to generate customer number: %w", err)
 		}
+		logger.Log.WithField("duration_ms", customerNumberDuration.Milliseconds()).Debug("CreateCustomer: Customer number generated")
 
+		entityIDStart := time.Now()
 		customerEntityID, err := s.idGen.GenerateCustomerEntityID(ctx, tx)
+		entityIDDuration := time.Since(entityIDStart)
 		if err != nil {
 			logger.Log.WithError(err).Error("CreateCustomer: Failed to generate customer entity ID")
 			return fmt.Errorf("failed to generate customer entity ID: %w", err)
 		}
+		logger.Log.WithField("duration_ms", entityIDDuration.Milliseconds()).Debug("CreateCustomer: Customer entity ID generated")
 
 		// Parse IDs as integers (sector/industry/target use integer IDs, not UUIDs)
 		// Use strconv for better performance than fmt.Sscanf
+		dataPrepStart := time.Now()
 		var sectorIDInt, industryIDInt, targetIDInt int
 		sectorIDInt, _ = strconv.Atoi(sectorID)
 		industryIDInt, _ = strconv.Atoi(industryID)
@@ -255,40 +289,50 @@ func (s *customerService) CreateCustomer(ctx context.Context, req *CreateCustome
 			CustomerSubType:    customerSubType,
 			RelatedEntity:      req.RelatedEntity,
 		}
+		logger.Log.WithField("duration_ms", time.Since(dataPrepStart).Milliseconds()).Debug("CreateCustomer: Data preparation completed")
 
 		// Create customer
+		customerCreateStart := time.Now()
 		if err := s.customerRepo.Create(ctx, tx, customer); err != nil {
 			logger.Log.WithError(err).Error("CreateCustomer: Failed to create customer record")
 			return fmt.Errorf("failed to create customer: %w", err)
 		}
+		logger.Log.WithField("duration_ms", time.Since(customerCreateStart).Milliseconds()).Debug("CreateCustomer: Customer record created")
 
 		// Prepare customer profile
+		profilePrepStart := time.Now()
 		profile := s.prepareCustomerProfile(
 			customerProfileID, customerID, customerNumber, customerEntityID,
 			bioData, customerType, sectorIDPtr, industryIDPtr, targetIDPtr,
 			sectorDesc, industryDesc, targetDesc,
 		)
+		logger.Log.WithField("duration_ms", time.Since(profilePrepStart).Milliseconds()).Debug("CreateCustomer: Customer profile prepared")
 
 		// Create customer profile
+		profileCreateStart := time.Now()
 		if err := s.profileRepo.Create(ctx, tx, profile); err != nil {
 			logger.Log.WithError(err).Error("CreateCustomer: Failed to create customer profile record")
 			return fmt.Errorf("failed to create customer profile: %w", err)
 		}
+		logger.Log.WithField("duration_ms", time.Since(profileCreateStart).Milliseconds()).Debug("CreateCustomer: Customer profile created")
 
 		// Create activity log
+		activityLogStart := time.Now()
 		activityLog := &models.ActivityLog{
 			ActivityLogID: s.idGen.GenerateUUID(),
 			Description:   "Customer created via channel direct flow by SYSTEM_USER",
-			CustomerID:    customerID,
+			CustomerID:    &customerID,
 		}
 
 		if err := s.activityLogRepo.Create(ctx, tx, activityLog); err != nil {
 			logger.Log.WithError(err).Error("CreateCustomer: Failed to create activity log")
 			return fmt.Errorf("failed to create activity log: %w", err)
 		}
+		logger.Log.WithField("duration_ms", time.Since(activityLogStart).Milliseconds()).Debug("CreateCustomer: Activity log created")
 
 		return nil
 	})
+	transactionDuration := time.Since(transactionStart)
 
 	if err != nil {
 		logger.Log.WithError(err).Error("CreateCustomer: Transaction failed")
@@ -296,9 +340,17 @@ func (s *customerService) CreateCustomer(ctx context.Context, req *CreateCustome
 	}
 
 	requestID = s.idGen.GenerateUUID()
+	totalDuration := time.Since(startTime)
 	logger.Log.WithFields(map[string]interface{}{
-		"customer_id": customerID,
-		"request_id":  requestID,
+		"customer_id":             customerID,
+		"request_id":              requestID,
+		"total_duration_ms":       totalDuration.Milliseconds(),
+		"transaction_duration_ms": transactionDuration.Milliseconds(),
+		"breakdown": map[string]interface{}{
+			"pre_transaction_ms": (transactionStart.Sub(startTime)).Milliseconds(),
+			"transaction_ms":     transactionDuration.Milliseconds(),
+			"post_transaction_ms": (totalDuration - transactionDuration - (transactionStart.Sub(startTime))).Milliseconds(),
+		},
 	}).Info("CreateCustomer: Customer creation completed successfully")
 
 	return &CreateCustomerResponse{

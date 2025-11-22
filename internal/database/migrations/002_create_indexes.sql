@@ -6,4 +6,3 @@
 -- CREATE INDEX IF NOT EXISTS idx_customer_profile_customer_id ON customer_profile("customerId");
 -- CREATE INDEX IF NOT EXISTS idx_customer_profile_mobile_number ON customer_profile("mobileNumber");
 -- CREATE INDEX IF NOT EXISTS idx_customer_profile_email ON customer_profile("emailAddress");
-

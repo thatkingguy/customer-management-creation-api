@@ -40,3 +40,5 @@ CREATE INDEX IF NOT EXISTS idx_customer_profile_nin_name
 ON customer_profile("nin", "firstName", "surname", "dateOfBirth") 
 WHERE "nin" IS NOT NULL;
 
+
+

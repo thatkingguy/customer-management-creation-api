@@ -24,9 +24,9 @@ func NewActivityLogRepository(db *sqlx.DB) ActivityLogRepository {
 func (r *activityLogRepository) Create(ctx context.Context, tx *sql.Tx, log *models.ActivityLog) error {
 	query := `
 		INSERT INTO activity_log (
-			"activityLogId", "description", "customerId", "createdAt", "updatedAt"
+			"activityLogId", "customerId", "requestId", "description", "reason", "createdAt", "updatedAt"
 		) VALUES (
-			$1, $2, $3, $4, $5
+			$1, $2, $3, $4, $5, $6, $7
 		)
 	`
 
@@ -34,13 +34,27 @@ func (r *activityLogRepository) Create(ctx context.Context, tx *sql.Tx, log *mod
 	log.CreatedAt = now
 	log.UpdatedAt = now
 
-	_, err := tx.ExecContext(ctx, query,
+	var reasonJSON interface{}
+	if log.Reason != nil {
+		reasonJSON = log.Reason
+	}
+
+	args := []interface{}{
 		log.ActivityLogID,
-		log.Description,
 		log.CustomerID,
+		log.RequestID,
+		log.Description,
+		reasonJSON,
 		log.CreatedAt,
 		log.UpdatedAt,
-	)
+	}
 
+	// Use transaction if provided, otherwise use DB connection directly
+	if tx != nil {
+		_, err := tx.ExecContext(ctx, query, args...)
+		return err
+	}
+
+	_, err := r.db.ExecContext(ctx, query, args...)
 	return err
 }
