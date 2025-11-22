@@ -21,3 +21,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_lookup_sme_company
 ON customer_profile_lookup("companyNameBusiness") 
 WHERE "companyNameBusiness" IS NOT NULL;
 
+
+

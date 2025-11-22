@@ -50,6 +50,9 @@ MIGRATIONS=(
     "002_create_indexes.sql"
     "003_create_customer_profile_lookup_indexes.sql"
     "004_create_customer_profile_indexes.sql"
+    "005_create_sector_industry_target_indexes.sql"
+    "006_create_unique_constraints_for_lookup.sql"
+    "007_create_request_and_interim_indexes.sql"
 )
 
 for migration in "${MIGRATIONS[@]}"; do
@@ -70,4 +73,6 @@ done
 
 echo ""
 echo -e "${GREEN}All migrations completed successfully!${NC}"
+
+
 

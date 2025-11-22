@@ -19,6 +19,7 @@ type ValidationService interface {
 	CheckPhoneExists(ctx context.Context, bioData map[string]interface{}, profileRepo repository.CustomerProfileRepository) (bool, error)
 	LookupCustomer(ctx context.Context, bioData map[string]interface{}, customerType string, profileRepo repository.CustomerProfileRepository, lookupRepo repository.CustomerProfileLookupRepository, tx *sql.Tx) error
 	ValidateSectorIndustryTarget(ctx context.Context, sectorCode, industryCode, targetCode string, sectorRepo repository.SectorRepository, industryRepo repository.IndustryRepository, targetRepo repository.TargetRepository) (sectorID, industryID, targetID string, sectorDesc, industryDesc, targetDesc string, err error)
+	ValidateSectorIndustryTargetCombined(ctx context.Context, sectorCode, industryCode, targetCode string, combinedRepo repository.SectorIndustryTargetRepository) (sectorID, industryID, targetID string, sectorDesc, industryDesc, targetDesc string, err error)
 }
 
 type validationService struct {
@@ -448,5 +449,70 @@ func (s *validationService) ValidateSectorIndustryTarget(ctx context.Context, se
 	logger.Log.WithField("target_id", targetID).Debug("ValidateSectorIndustryTarget: Target found")
 	logger.Log.Debug("ValidateSectorIndustryTarget: Validation completed successfully")
 
+	return sectorID, industryID, targetID, sectorDesc, industryDesc, targetDesc, nil
+}
+
+// ValidateSectorIndustryTargetCombined uses a single combined query to fetch all three entities
+// This reduces network round trips from 3 to 1, significantly improving performance
+func (s *validationService) ValidateSectorIndustryTargetCombined(ctx context.Context, sectorCode, industryCode, targetCode string, combinedRepo repository.SectorIndustryTargetRepository) (sectorID, industryID, targetID string, sectorDesc, industryDesc, targetDesc string, err error) {
+	// Extract numeric codes (handles "4200" or "4200-ABC" formats)
+	sectorCode = utils.ExtractNumericCode(sectorCode)
+	industryCode = utils.ExtractNumericCode(industryCode)
+	targetCode = utils.ExtractNumericCode(targetCode)
+
+	// Single query to fetch all three
+	sector, industry, target, err := combinedRepo.FindAllByCodes(ctx, sectorCode, industryCode, targetCode)
+	if err != nil {
+		logger.Log.WithError(err).Error("ValidateSectorIndustryTargetCombined: Combined lookup failed")
+		return "", "", "", "", "", "", utils.NewDatabaseError("Failed to find sector/industry/target", err)
+	}
+
+	// Validate sector
+	if sectorCode != "" {
+		if sector == nil {
+			logger.Log.WithField("sector_code", sectorCode).Error("ValidateSectorIndustryTargetCombined: Sector not found")
+			return "", "", "", "", "", "", utils.NewNotFoundError(fmt.Sprintf("Sector not found: %s", sectorCode), nil)
+		}
+		sectorID = fmt.Sprintf("%d", sector.SectorID)
+		sectorDesc = sector.Description
+		logger.Log.WithField("sector_id", sectorID).Debug("ValidateSectorIndustryTargetCombined: Sector found")
+	}
+
+	// Validate industry
+	if industryCode != "" {
+		if industry == nil {
+			logger.Log.WithField("industry_code", industryCode).Error("ValidateSectorIndustryTargetCombined: Industry not found")
+			return "", "", "", "", "", "", utils.NewNotFoundError(fmt.Sprintf("Industry not found: %s", industryCode), nil)
+		}
+		industryID = fmt.Sprintf("%d", industry.IndustryID)
+		industryDesc = industry.Description
+		logger.Log.WithField("industry_id", industryID).Debug("ValidateSectorIndustryTargetCombined: Industry found")
+
+		// Validate that industry belongs to sector
+		if sectorCode != "" && sector != nil && sector.SectorID != industry.SectorID {
+			logger.Log.WithFields(map[string]interface{}{
+				"sector_id":   sectorID,
+				"industry_id": industryID,
+			}).Error("ValidateSectorIndustryTargetCombined: Industry does not belong to sector")
+			return "", "", "", "", "", "", utils.NewValidationError(fmt.Sprintf("Industry %s does not belong to sector %s", industryCode, sectorCode), nil)
+		}
+	}
+
+	// Validate target
+	if targetCode != "" {
+		if target == nil {
+			logger.Log.WithField("target_code", targetCode).Error("ValidateSectorIndustryTargetCombined: Target not found")
+			return "", "", "", "", "", "", utils.NewNotFoundError(fmt.Sprintf("Target not found: %s", targetCode), nil)
+		}
+		targetID = fmt.Sprintf("%d", target.TargetID)
+		if target.Description != nil && *target.Description != "" {
+			targetDesc = *target.Description
+		} else {
+			targetDesc = target.ShortName
+		}
+		logger.Log.WithField("target_id", targetID).Debug("ValidateSectorIndustryTargetCombined: Target found")
+	}
+
+	logger.Log.Debug("ValidateSectorIndustryTargetCombined: Validation completed successfully")
 	return sectorID, industryID, targetID, sectorDesc, industryDesc, targetDesc, nil
 }

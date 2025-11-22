@@ -29,3 +29,5 @@ ON target("targetId");
 CREATE INDEX IF NOT EXISTS idx_target_description_lower 
 ON target(LOWER(description));
 
+
+

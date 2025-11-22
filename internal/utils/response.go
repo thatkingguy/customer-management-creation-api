@@ -18,3 +18,5 @@ func NewSuccessResponse(message string, data interface{}, code int) SuccessRespo
 	}
 }
 
+
+

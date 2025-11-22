@@ -23,16 +23,21 @@ func Connect(cfg *config.DatabaseConfig) error {
 		logger.Log.Debugf("Attempting database connection (attempt %d/%d)", i+1, maxRetries)
 		DB, err = sqlx.Connect("postgres", cfg.ConnectionString())
 		if err == nil {
-			// Configure connection pool
+			// Configure connection pool for optimal performance
+			// Increase idle connections to reduce connection acquisition overhead
+			maxIdleConns := cfg.MaxIdleConns
+			if maxIdleConns < 10 {
+				maxIdleConns = 10 // Ensure at least 10 idle connections for better performance
+			}
 			DB.SetMaxOpenConns(cfg.MaxOpenConns)
-			DB.SetMaxIdleConns(cfg.MaxIdleConns)
+			DB.SetMaxIdleConns(maxIdleConns)
 			DB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 			DB.SetConnMaxIdleTime(10 * time.Minute)
 			logger.Log.WithFields(map[string]interface{}{
 				"max_open_conns":    cfg.MaxOpenConns,
-				"max_idle_conns":    cfg.MaxIdleConns,
+				"max_idle_conns":    maxIdleConns,
 				"conn_max_lifetime": cfg.ConnMaxLifetime,
-			}).Debug("Database connection pool configured")
+			}).Info("Database connection pool configured")
 
 			// Test connection
 			logger.Log.Debug("Pinging database to verify connection")
