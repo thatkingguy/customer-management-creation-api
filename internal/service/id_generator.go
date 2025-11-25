@@ -37,4 +37,3 @@ func (s *idGeneratorService) GenerateCustomerEntityID(ctx context.Context, tx *s
 	err := tx.QueryRowContext(ctx, `SELECT nextval('customer_entity_id_seq')::text`).Scan(&entityID)
 	return entityID, err
 }
-

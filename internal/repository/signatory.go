@@ -101,3 +101,6 @@ func (r *signatoryRepository) CreateBatch(ctx context.Context, tx *sql.Tx, signa
 	return nil
 }
 
+
+
+

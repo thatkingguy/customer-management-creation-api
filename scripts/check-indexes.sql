@@ -38,3 +38,6 @@ WHERE tc.constraint_type = 'PRIMARY KEY'
 -- Explain plan for interim approval config query
 -- EXPLAIN ANALYZE SELECT * FROM interim_approval_config WHERE "customerType" = 'Individual' AND "gracePeriod" = true AND "status" = 'Approved' ORDER BY "createdAt" DESC LIMIT 1;
 
+
+
+

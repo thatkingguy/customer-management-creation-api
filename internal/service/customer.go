@@ -347,8 +347,8 @@ func (s *customerService) CreateCustomer(ctx context.Context, req *CreateCustome
 		"total_duration_ms":       totalDuration.Milliseconds(),
 		"transaction_duration_ms": transactionDuration.Milliseconds(),
 		"breakdown": map[string]interface{}{
-			"pre_transaction_ms": (transactionStart.Sub(startTime)).Milliseconds(),
-			"transaction_ms":     transactionDuration.Milliseconds(),
+			"pre_transaction_ms":  (transactionStart.Sub(startTime)).Milliseconds(),
+			"transaction_ms":      transactionDuration.Milliseconds(),
 			"post_transaction_ms": (totalDuration - transactionDuration - (transactionStart.Sub(startTime))).Milliseconds(),
 		},
 	}).Info("CreateCustomer: Customer creation completed successfully")

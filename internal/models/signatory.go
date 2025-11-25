@@ -53,3 +53,6 @@ type Signatory struct {
 	UpdatedAt                      time.Time  `db:"updatedAt" json:"updatedAt"`
 }
 
+
+
+
