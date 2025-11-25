@@ -37,21 +37,21 @@ func (s *requestService) createRiskAssessments(ctx context.Context, tx *sql.Tx, 
 			}
 
 			assessment := &models.RiskAssessment{
-				RiskAssessmentID:       s.idGen.GenerateUUID(),
-				CustomerID:             &customerID,
-				SectionName:             stringPtr(sectionName),
-				Parameter:               getStringValueFromMap(itemMap, "parameter"),
-				ImpliedWeight:           getIntValueFromMap(itemMap, "impliedWeight"),
-				ParameterOption:         getStringValueFromMap(itemMap, "parameterOption"),
-				AssessmentType:          getStringPtrFromMap(itemMap, "assessmentType"),
-				EscalationFactor:        getIntPtrFromMap(itemMap, "escalationFactor"),
-				OptionsWeightAllocation: getIntValueFromMap(itemMap, "optionsWeightAllocation"),
-				Score:                   getIntValueFromMap(itemMap, "score"),
-				TypeOfPoliticalExposure: getStringPtrFromMap(itemMap, "typeOfPoliticalExposure"),
+				RiskAssessmentID:            s.idGen.GenerateUUID(),
+				CustomerID:                  &customerID,
+				SectionName:                 stringPtr(sectionName),
+				Parameter:                   getStringValueFromMap(itemMap, "parameter"),
+				ImpliedWeight:               getIntValueFromMap(itemMap, "impliedWeight"),
+				ParameterOption:             getStringValueFromMap(itemMap, "parameterOption"),
+				AssessmentType:              getStringPtrFromMap(itemMap, "assessmentType"),
+				EscalationFactor:            getIntPtrFromMap(itemMap, "escalationFactor"),
+				OptionsWeightAllocation:     getIntValueFromMap(itemMap, "optionsWeightAllocation"),
+				Score:                       getIntValueFromMap(itemMap, "score"),
+				TypeOfPoliticalExposure:     getStringPtrFromMap(itemMap, "typeOfPoliticalExposure"),
 				TypeOfPoliticalExposureDesc: getStringPtrFromMap(itemMap, "typeOfPoliticalExposureDesc"),
-				Data:                   models.JSONB(itemMap),
-				CreatedAt:               time.Now(),
-				UpdatedAt:               time.Now(),
+				Data:                        models.JSONB(itemMap),
+				CreatedAt:                   time.Now(),
+				UpdatedAt:                   time.Now(),
 			}
 
 			assessments = append(assessments, assessment)
@@ -136,20 +136,20 @@ func (s *requestService) createSignatories(ctx context.Context, tx *sql.Tx, cust
 			}
 
 			signatory := &models.Signatory{
-				SignatoryID:     s.idGen.GenerateUUID(),
-				CustomerID:      &customerID,
-				Title:           getStringPtrFromMap(itemMap, "title"),
-				FirstName:       getStringPtrFromMap(itemMap, "firstName"),
-				Surname:         getStringPtrFromMap(itemMap, "surname"),
-				OtherNames:      getStringPtrFromMap(itemMap, "otherNames"),
-				DateOfBirth:     getStringPtrFromMap(itemMap, "dateOfBirth"),
-				MobileNumber:    getStringPtrFromMap(itemMap, "mobileNumber"),
-				EmailAddress:    getStringPtrFromMap(itemMap, "emailAddress"),
+				SignatoryID:      s.idGen.GenerateUUID(),
+				CustomerID:       &customerID,
+				Title:            getStringPtrFromMap(itemMap, "title"),
+				FirstName:        getStringPtrFromMap(itemMap, "firstName"),
+				Surname:          getStringPtrFromMap(itemMap, "surname"),
+				OtherNames:       getStringPtrFromMap(itemMap, "otherNames"),
+				DateOfBirth:      getStringPtrFromMap(itemMap, "dateOfBirth"),
+				MobileNumber:     getStringPtrFromMap(itemMap, "mobileNumber"),
+				EmailAddress:     getStringPtrFromMap(itemMap, "emailAddress"),
 				PrimarySignatory: getBoolValueFromMap(itemMap, "primarySignatory"),
-				BVN:             getStringPtrFromMap(itemMap, "bvn"),
-				NIN:             getStringPtrFromMap(itemMap, "nin"),
-				CreatedAt:       time.Now(),
-				UpdatedAt:       time.Now(),
+				BVN:              getStringPtrFromMap(itemMap, "bvn"),
+				NIN:              getStringPtrFromMap(itemMap, "nin"),
+				CreatedAt:        time.Now(),
+				UpdatedAt:        time.Now(),
 			}
 
 			signatories = append(signatories, signatory)
@@ -253,19 +253,19 @@ func (s *requestService) createGracePeriodData(ctx context.Context, tx *sql.Tx, 
 
 	gracePeriod := &models.CustomerGracePeriod{
 		CustomerGracePeriodID:      customerGracePeriodID,
-		InterimApprovalConfigID:     &interimConfig.InterimApprovalConfigID,
-		CustomerID:                  &customerID,
-		GracePeriod:                 interimConfig.GracePeriod,
-		GracePeriodDate:             &gracePeriodDate,
-		NotifyCustomer:              interimConfig.NotifyCustomer,
-		NotifyCustomerDate:          notifyCustomerDate,
-		NotifyCustomerChannels:      interimConfig.NotifyCustomerChannels,
-		NotifyRelationshipTeam:      interimConfig.NotifyRelationshipTeam,
-		NotifyRelationshipTeamDate:   notifyRelationshipTeamDate,
-		RelationshipTeam:            interimConfig.RelationshipTeam,
-		InterimApprovalConfigData:   models.JSONB{}, // Store config as JSONB
-		CreatedAt:                   requestDate,
-		UpdatedAt:                    requestDate,
+		InterimApprovalConfigID:    &interimConfig.InterimApprovalConfigID,
+		CustomerID:                 &customerID,
+		GracePeriod:                interimConfig.GracePeriod,
+		GracePeriodDate:            &gracePeriodDate,
+		NotifyCustomer:             interimConfig.NotifyCustomer,
+		NotifyCustomerDate:         notifyCustomerDate,
+		NotifyCustomerChannels:     interimConfig.NotifyCustomerChannels,
+		NotifyRelationshipTeam:     interimConfig.NotifyRelationshipTeam,
+		NotifyRelationshipTeamDate: notifyRelationshipTeamDate,
+		RelationshipTeam:           interimConfig.RelationshipTeam,
+		InterimApprovalConfigData:  models.JSONB{}, // Store config as JSONB
+		CreatedAt:                  requestDate,
+		UpdatedAt:                  requestDate,
 	}
 
 	// Convert config to JSONB
@@ -351,4 +351,3 @@ func convertToJSONB(v interface{}) (models.JSONB, error) {
 	err = json.Unmarshal(jsonBytes, &result)
 	return result, err
 }
-

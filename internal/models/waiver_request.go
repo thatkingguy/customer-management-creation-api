@@ -19,3 +19,6 @@ type WaiverRequest struct {
 	UpdatedAt        time.Time  `db:"updatedAt" json:"updatedAt"`
 }
 
+
+
+

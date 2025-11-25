@@ -74,9 +74,9 @@ func NewUnauthorizedError(message string) *AppError {
 
 // ErrorResponse represents the error response structure
 type ErrorResponse struct {
-	Status      string `json:"status"`
-	Message     string `json:"message"`
-	ResponseCode int   `json:"responseCode"`
+	Status       string `json:"status"`
+	Message      string `json:"error"`
+	ResponseCode int    `json:"responseCode"`
 }
 
 // ToErrorResponse converts AppError to ErrorResponse
@@ -87,6 +87,3 @@ func (e *AppError) ToErrorResponse() ErrorResponse {
 		ResponseCode: e.Code,
 	}
 }
-
-
-
